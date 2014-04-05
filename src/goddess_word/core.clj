@@ -184,7 +184,7 @@
           (assert-msg  (or (= "@" attr) (= "#" attr) (= "=" attr)) (str "line:" line))
           {:tag tag-id :attr attr :meaning (split meaning #"\s+")})))))
 
-(defn irlab-dict-map 
+(defn import-irlab-dict-map 
   "get the line no. of irlab dict by a certain word."
   [irlab-dict-words]
   (reduce into {} 
@@ -221,12 +221,51 @@
      (let [word1 (first word-comb) word2 (second word-comb) distance (levenshtein-distance word1 word2)]
        (if (>= 2 distance) (do  {word1 {word2 distance} word2 {word1 distance}}) {})))))
 
+(defn join-to-a-string-vector
+  "concat to a string vector."
+  [data]
+  (cond 
+    (string? data) (list data)
+    (every? string? data) (seq data)
+    :else (reduce concat (for [multi-vec data] (join-to-a-string-vector multi-vec)))))
+
+(defn now
+  "current time in seconds."
+  []
+  (quot (System/currentTimeMillis) 1000))
+(def now-time (now)) ;use for random-choose
+
+(defn choose-by-time
+  "choose seq by time."
+  [seq]
+  (get (vec seq) (mod now-time (count seq))))
+
+
+(defn remove-unwanted-char-by-attr
+  "remove unwanted in zh word."
+  [word attr]
+  (if (and (re-matches #".*(a[djv]*\.).*" attr) (or (= 3 (count word)) (= 5 (count word)))) (clojure.string/replace word  #"(地)|(的)$" "") word))
+
+(defn get-fixed-word-meaning
+  "get meaning removed zh de di."
+  [word-meaning attr]
+  #_(println "******check:******" word-meaning)
+  (choose-by-time (for [same-meaning (split word-meaning #"\s*,\s*")] (remove-unwanted-char-by-attr same-meaning attr))))
+
+(defn import-zh-words-as-random-option
+  "import zh-words as random option from basic.txt."
+  [file]
+  {:pre [(.exists (io/file file))]}
+  (reduce into [] (for [line (split (slurp file) #"\n") :when (not= \# (first line))] (split line #"\s+"))))
+
+
 (defn init []
+  (def option-zh-words (import-zh-words-as-random-option "resources/option-zh-words/words.txt"))
   (def en-dict (import-en-dict "resources/dict/en-zh.txt"))
   (def zh-dict (import-zh-dict "resources/dict/zh-en.txt"))
   #(def irlab-dict-vec (import-irlab-dict "resources/chinese-words-classification/HIT-IRLab-full_2005.3.3.txt"))
   (def irlab-dict-vec (import-irlab-dict "resources/chinese-words-classification/trimed-irlab.txt"))
-  (def irlab-dict-map (irlab-dict-map irlab-dict-vec))
+  (def irlab-dict-map (import-irlab-dict-map irlab-dict-vec))
 
   #_(def en-dict-jacent-words (generate-jacent-words (set (keys en-dict))))
   (def en-dict-jacent-words (import-word-neighbor-dict "resources/dict/word-neighbor.txt")))
@@ -272,28 +311,18 @@
            to (if (> (+ index distance) high-bound) high-bound (+ index distance))] 
      (reduce into {} 
       (for [i (range from to)] 
-        (let [choosed-words (choose-matched-en-words (get irlab-dict-vec i) (= index i))]
-          (if-not (seq choosed-words) {} (zmap choosed-words (abs (- i index))))))))))
-
-(defn remove-unwanted-char-by-attr
-  "remove unwanted in zh word."
-  [word attr]
-  (if (and (re-matches #".*(a[djv]*\.).*" attr) (or (= 3 (count word)) (= 5 (count word)))) (clojure.string/replace word  #"(地)|(的)$" "") word))
-
+        (let [choosed-words (choose-matched-en-words (get irlab-dict-vec i) (= index i)) neighbor-distance (abs (- i index))]
+          #_(if (zero? neighbor-distance) (println "****debug check choosed-words:" choosed-words))
+          #_(println "****debug check target-word:" target-word " index:" index " i:" i " choosed-words:" choosed-words " neighbor-distance:" neighbor-distance)
+          (if-not (seq choosed-words) {} (zmap choosed-words neighbor-distance))))))))
 
 (defn get-relevant-words 
   "get relevant words by a word's meaning."
   [word-meaning attr]
   ;ad. a.
   (let [results (filter #(seq %) (for [same-meaning (split word-meaning #"\s*,\s*")] (search-zh-word-by-distance (remove-unwanted-char-by-attr same-meaning attr) 10)))]
-      (if (seq results) (rand-nth results) {})))  
-
-
-(defn get-fixed-word-meaning
-  "get meaning removed zh de di."
-  [word-meaning attr]
-  #_(println "******check:******" word-meaning)
-  (rand-nth (for [same-meaning (split word-meaning #"\s*,\s*")] (remove-unwanted-char-by-attr same-meaning attr))))
+      #_(println "*********debug:check results: " results " word-meaning:" word-meaning " attr:" attr)
+      (if (seq results) (choose-by-time results) {})))  
 
 (defn import-question-bank
   "import QA words from file."
@@ -312,8 +341,12 @@
                  {:attr attr, :meaning
                     (into []
                      (for [single-meaning (split meaning #";")]
-                       {:content (get-fixed-word-meaning single-meaning attr), :relevant-words (get-relevant-words single-meaning attr)}))})))}}))))
+                       (let [relevant-words (get-relevant-words single-meaning attr)]
+                       #_(println "******debug check line:" line " single-meaning:" single-meaning  " relevant-words:" relevant-words)
+                       {:content (get-fixed-word-meaning single-meaning attr), :relevant-words relevant-words})))})))}}))))
  
+
+
 (defn weighted-rand-choice [m]
     "choose by map weighted values."
     {:pre [(< 0 (count (keys m)))]}
@@ -324,7 +357,8 @@
 (defn rand-choose3-in-weighted-map
   "choose 3 elements in map by weighted val."
   [key-val-pairs]
-  {:pre [(<= 3 (count (keys key-val-pairs)))]}
+  #{:pre [(<= 3 (count (keys key-val-pairs)))]}
+  (assert-msg (<= 3 (count (keys key-val-pairs))) (str "error: check key-val-pairs:" key-val-pairs))
   (let [key1 (weighted-rand-choice key-val-pairs) key2 (weighted-rand-choice (dissoc key-val-pairs  key1)) key3 (weighted-rand-choice (dissoc key-val-pairs key1 key2))]
     [key1 key2 key3]))
 
@@ -336,12 +370,13 @@
 
 (defn get-three-relevant-words
   "get 3 zh relevant words."
-  [relevant-words]
-  (if 
-    (<= 3 (count (keys relevant-words))) 
-    (map :zh (rand-choose3-in-weighted-map 
-                (into {} (for [[key val] relevant-words] {key (- 11 val)}))))
-    (rand3-in-vec (keys irlab-dict-map))))
+  [target-word relevant-words]
+  #_(println "****debug target-word:" target-word " relevant-words:" relevant-words)
+  (let [filtered-words (into {} (for [[key val] relevant-words :when (and (not (zero? val)) (not= (:zh key) target-word))] {key (- 11 val)}))] 
+   (if 
+    (<= 3 (count (keys filtered-words))) 
+    (map :zh (rand-choose3-in-weighted-map filtered-words)) ;;fix multi option with the same meaning
+    (rand3-in-vec  option-zh-words)))) ;;choose rand3 zh words in irlab. some bug to fix
 
 (defn get-three-relevant-en-words
   "get 3 en relevant words."
@@ -372,8 +407,11 @@
   (let [word (first word-meaning)  meaning (second word-meaning)] 
     (assert-msg (< 0 (count (:attr-meaning meaning))) (str "word no meaning. impossiable, word:" word))
     (assert-msg (< 0 (count (:meaning (rand-nth (:attr-meaning meaning))))) (str "word no meaning. impossiable, word:" word))
-    (let [random-meaning (rand-nth (:meaning (rand-nth (:attr-meaning meaning))))]
-      {:word word :meaning (:content random-meaning), :relevant-words (get-three-relevant-words (:relevant-words random-meaning))})))
+    (let [random-meaning (rand-nth (:meaning (rand-nth (:attr-meaning meaning)))) 
+          one-meaning (:content random-meaning) 
+          relevant-words (get-three-relevant-words one-meaning (:relevant-words random-meaning))]
+      (assert-msg (not (in? relevant-words one-meaning)) (str "option and answer is the same.word:" word " all-meaning:" meaning "  random-meaning:" random-meaning " choosed-meaning:" one-meaning " relevant-words:" (vec relevant-words)))
+      {:word word, :meaning one-meaning, :relevant-words relevant-words})))
 
 (defn gen-en2zh-qlib
   "generate cet4 en2zh lib."

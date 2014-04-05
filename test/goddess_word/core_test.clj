@@ -62,7 +62,7 @@
 
 (deftest irlab-dict-map-test
   (testing "irlab-dict-map function test."
-    (is (= (irlab-dict-map (import-irlab-dict "test/goddess_word/irlab-words-test.txt")) {"囡囡" 5, "宝贝" 5, "龙驹" 1, "乖乖" 5, "毛毛" 4, "宝宝" 5, "早产儿" 4, "女婴" 6, "少年" 0, "少男" 3, "务工青年" 2, "年幼" 0, "婴儿" 4, "乳儿" 4, "未成年人" 0, "赤子" 4, "小鬼" 5, "未成年" 0, "小宝宝" 5, "千里驹" 1, "宝贝疙瘩" 5, "新生儿" 4, "小儿" 4, "圣婴" 8, "弃婴" 7, "芝兰" 1, "婴" 4, "婴孩" 4, "少年人" 0, "苗" 0, "待业青年" 2, "婴幼儿" 4, "产儿" 4, "苗子" 0, "男婴" 6, "男孩子" 3, "宝贝儿" 5}))))
+    (is (= (import-irlab-dict-map (import-irlab-dict "test/goddess_word/irlab-words-test.txt")) {"囡囡" 5, "宝贝" 5, "龙驹" 1, "乖乖" 5, "毛毛" 4, "宝宝" 5, "早产儿" 4, "女婴" 6, "少年" 0, "少男" 3, "务工青年" 2, "年幼" 0, "婴儿" 4, "乳儿" 4, "未成年人" 0, "赤子" 4, "小鬼" 5, "未成年" 0, "小宝宝" 5, "千里驹" 1, "宝贝疙瘩" 5, "新生儿" 4, "小儿" 4, "圣婴" 8, "弃婴" 7, "芝兰" 1, "婴" 4, "婴孩" 4, "少年人" 0, "苗" 0, "待业青年" 2, "婴幼儿" 4, "产儿" 4, "苗子" 0, "男婴" 6, "男孩子" 3, "宝贝儿" 5}))))
 
 (deftest zmap-test
   (testing "zmap function test."
@@ -95,6 +95,17 @@
     (is (= ((generate-jacent-words #{"kaka"}) {})))
     (is (= ((generate-jacent-words #{"bone" "kaka"}) {"kaka" {"bone" 2}, "bone" {"kaka" 2}})))
     (is (= ((generate-jacent-words #{"bone" "jack" "kaka"}) {"jack" {"kaka" 2, "bone" 2}, "kaka" {"jack" 2, "bone" 2}, "bone" {"jack" 2, "kaka" 2}}))))))
+
+
+(deftest join-to-a-string-vector-test
+  (testing "join-to-a-string-vector function test."
+    (is (= (join-to-a-string-vector  "") (list "")))
+    (is (= (join-to-a-string-vector  "bone") (list "bone")))
+    (is (= (join-to-a-string-vector  ["bone" "lee"]) (list "bone" "lee")))
+    (is (= (join-to-a-string-vector  ["bone" ["xixi"] "lee"]) (list "bone" "xixi" "lee")))
+    (is (= (join-to-a-string-vector  [["bone"] ["xixi"] ["lee"]]) (list "bone" "xixi" "lee")))
+    (is (= (join-to-a-string-vector  [["bone"] "xixi" ["lee"]]) (list "bone" "xixi" "lee")))
+    (is (= (join-to-a-string-vector  [["bone" "kaka" ["how" ["are" "you"]]] "xixi" ["lee"]]) (list "bone" "kaka" "how"  "are"  "you" "xixi" "lee")))))
 
 
 ;;;---------------------------------integration test---------------------------------
